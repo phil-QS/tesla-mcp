@@ -16,13 +16,14 @@ import fs from 'fs';
 import * as crypto from 'crypto';
 import { exec } from 'child_process';
 import ngrok from 'ngrok';
+import { getTeslaRegionConfig, loadTeslaEnv } from './teslaRegion.js';
 
 // For ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
-dotenv.config();
+loadTeslaEnv();
+const regionConfig = getTeslaRegionConfig();
 
 // Configuration
 const PORT = 4000; // Use a different port than the MCP server
@@ -32,7 +33,8 @@ const PUBLIC_KEY_PATH = path.join(KEYS_DIR, 'public-key.pem');
 const PUBLIC_KEY_ENDPOINT = '/.well-known/appspecific/com.tesla.3p.public-key.pem';
 
 // Tesla API configuration
-const BASE_URL = 'https://fleet-api.prd.na.vn.cloud.tesla.com'; // Change if needed for your region
+const BASE_URL = regionConfig.fleetApiUrl;
+const AUTH_TOKEN_URL = `${regionConfig.authBaseUrl}/token`;
 
 const app = express();
 
@@ -104,8 +106,11 @@ async function getAccessToken() {
         params.append('client_secret', clientSecret);
         params.append('refresh_token', refreshToken);
         params.append('scope', 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds');
+        if (regionConfig.region === 'CN') {
+            params.append('audience', regionConfig.audience);
+        }
 
-        const response = await axios.post('https://auth.tesla.com/oauth2/v3/token', params, {
+        const response = await axios.post(AUTH_TOKEN_URL, params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
@@ -264,7 +269,7 @@ async function startServer() {
 
         console.log('\nRegister your application:');
         console.log('---------------------------');
-        console.log('1. Go to the Tesla Developer Portal: https://developer.tesla.com');
+        console.log('1. Go to the Tesla Developer Portal:', regionConfig.developerPortal);
         console.log('2. Update your application settings:');
         console.log(`   - Set Allowed Origin to: ${url}`);
         console.log('3. Once updated, open this URL in your browser to register:');

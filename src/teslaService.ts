@@ -5,54 +5,29 @@
  */
 
 import axios from 'axios';
-import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { getTeslaRegionConfig, loadTeslaEnv } from './teslaRegion.js';
 
 // For ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables from different potential locations
-const envPaths = [
-    path.join(process.cwd(), '.env'),
-    path.join(__dirname, '../.env'),
-    path.join(__dirname, '../../.env'),
-];
+loadTeslaEnv();
 
-let envLoaded = false;
-for (const envPath of envPaths) {
-    if (fs.existsSync(envPath)) {
-        console.error(`Loading environment from ${envPath}`);
-        dotenv.config({ path: envPath });
-        envLoaded = true;
-        break;
-    }
-}
-
-if (!envLoaded) {
-    console.error('Warning: No .env file found. Environment variables must be set manually.');
-}
+const regionConfig = getTeslaRegionConfig();
+const BASE_URL = regionConfig.fleetApiUrl;
+const AUTH_URL = `${regionConfig.authBaseUrl}/token`;
 
 // Print environment variable status for debugging (to stderr so it doesn't interfere with MCP)
+console.error(`Tesla region: ${regionConfig.region}, fleet API: ${BASE_URL}`);
 console.error(`Environment check: TESLA_CLIENT_ID=${process.env.TESLA_CLIENT_ID ? 'set' : 'not set'}, TESLA_CLIENT_SECRET=${process.env.TESLA_CLIENT_SECRET ? 'set' : 'not set'}, TESLA_REFRESH_TOKEN=${process.env.TESLA_REFRESH_TOKEN ? 'set' : 'not set'}`);
 
 // Paths to keys
 const KEYS_DIR = path.join(__dirname, '../keys');
 const PRIVATE_KEY_PATH = path.join(KEYS_DIR, 'private-key.pem');
-
-// API constants - choose the appropriate endpoint based on your region
-const BASE_URLS = {
-    'NA': 'https://fleet-api.prd.na.vn.cloud.tesla.com', // North America, Asia-Pacific (excluding China)
-    'EU': 'https://fleet-api.prd.eu.vn.cloud.tesla.com', // Europe, Middle East, Africa
-    'CN': 'https://fleet-api.prd.cn.vn.cloud.tesla.cn'   // China
-};
-const BASE_URL = BASE_URLS.NA; // Default to North America
-const AUTH_URL = 'https://auth.tesla.com/oauth2/v3/token';
-
-// Types
 export interface Vehicle {
     id: string;
     vin: string;
@@ -118,6 +93,9 @@ export class TeslaService {
             params.append('client_secret', clientSecret);
             params.append('refresh_token', refreshToken);
             params.append('scope', 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds');
+            if (regionConfig.region === 'CN') {
+                params.append('audience', regionConfig.audience);
+            }
 
             const response = await axios.post(AUTH_URL, params, {
                 headers: {

@@ -4,7 +4,6 @@
  */
 
 import axios from 'axios';
-import dotenv from 'dotenv';
 import * as http from 'http';
 import { URL } from 'url';
 import { exec } from 'child_process';
@@ -13,13 +12,13 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import * as crypto from 'crypto';
+import { getTeslaRegionConfig, loadTeslaEnv } from './teslaRegion.js';
 
 // Get current file's directory in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
-dotenv.config();
+const loadedEnvPath = loadTeslaEnv();
 
 // Get environment variables
 const clientId = process.env.TESLA_CLIENT_ID;
@@ -31,9 +30,11 @@ if (!clientId || !clientSecret) {
 }
 
 // Constants
-const AUTH_URL = 'https://auth.tesla.com/oauth2/v3';
-const PORT = 3000;
-const REDIRECT_URI = `http://localhost:${PORT}/callback`;
+const regionConfig = getTeslaRegionConfig();
+const AUTH_URL = regionConfig.authBaseUrl;
+const PORT = Number(process.env.TESLA_CALLBACK_PORT) || 3000;
+// 必须与 developer.tesla.cn 中「允许的重定向 URI」完全一致（可用花生壳 HTTPS 地址）
+const REDIRECT_URI = (process.env.TESLA_REDIRECT_URI || `http://localhost:${PORT}/callback`).trim();
 const SCOPES = 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds';
 
 // Generate PKCE code verifier and challenge
@@ -51,10 +52,25 @@ const codeVerifier = generateCodeVerifier();
 const codeChallenge = generateCodeChallenge(codeVerifier);
 
 // Authorization URL
-const authUrl = `${AUTH_URL}/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(SCOPES)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+const authParams = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: REDIRECT_URI,
+    response_type: 'code',
+    scope: SCOPES,
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+});
+if (regionConfig.region === 'CN') {
+    authParams.set('locale', 'zh-CN');
+    authParams.set('prompt', 'login');
+}
+const authUrl = `${AUTH_URL}/authorize?${authParams.toString()}`;
 
 // Debug output
 console.log('\n==== DEBUG INFO ====');
+console.log('Region:', regionConfig.region);
+console.log('Developer Portal:', regionConfig.developerPortal);
 console.log('Client ID:', clientId);
 console.log('Redirect URI:', REDIRECT_URI);
 console.log('Code Verifier:', codeVerifier);
@@ -127,6 +143,9 @@ const server = http.createServer(async (req, res) => {
                 params.append('code', code);
                 params.append('code_verifier', codeVerifier);
                 params.append('redirect_uri', REDIRECT_URI);
+                if (regionConfig.region === 'CN') {
+                    params.append('audience', regionConfig.audience);
+                }
 
                 // Exchange the code for tokens using form URL encoding
                 const tokenResponse = await axios.post(`${AUTH_URL}/token`, params, {
@@ -145,8 +164,8 @@ const server = http.createServer(async (req, res) => {
 
                 // Update the .env file with the refresh token
                 try {
-                    const envPath = path.resolve(process.cwd(), '.env');
-                    let envContent = fs.readFileSync(envPath, 'utf8');
+                    const envPath = loadedEnvPath || path.resolve(process.cwd(), '.env');
+                    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
                     // Replace or add the refresh token
                     if (envContent.includes('TESLA_REFRESH_TOKEN=')) {
@@ -206,7 +225,12 @@ function startServer() {
 
     // Start the server
     server.listen(PORT, () => {
-        console.log(`\nListening for Tesla API callback on http://localhost:${PORT}`);
+        console.log(`\nListening for Tesla API callback on http://localhost:${PORT}/callback`);
+        if (REDIRECT_URI.startsWith('http://localhost') || REDIRECT_URI.startsWith('http://127.0.0.1')) {
+            console.log('(本地回调：授权后浏览器会跳转到上述地址)');
+        } else {
+            console.log(`(公网回调地址：${REDIRECT_URI} → 请确保花生壳/内网穿透已映射到本机 ${PORT} 端口)`);
+        }
     });
 }
 

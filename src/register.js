@@ -20,20 +20,45 @@ import readline from 'readline';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from tesla-mcp root .env
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+const TESLA_REGION = String(process.env.TESLA_REGION || 'NA').toUpperCase();
+const REGION_CONFIG = {
+    NA: {
+        fleetApiUrl: 'https://fleet-api.prd.na.vn.cloud.tesla.com',
+        authTokenUrl: 'https://auth.tesla.com/oauth2/v3/token',
+        partnerAuthUrl: 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token',
+        audience: 'https://fleet-api.prd.na.vn.cloud.tesla.com',
+        developerPortal: 'https://developer.tesla.com'
+    },
+    EU: {
+        fleetApiUrl: 'https://fleet-api.prd.eu.vn.cloud.tesla.com',
+        authTokenUrl: 'https://auth.tesla.com/oauth2/v3/token',
+        partnerAuthUrl: 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token',
+        audience: 'https://fleet-api.prd.eu.vn.cloud.tesla.com',
+        developerPortal: 'https://developer.tesla.com'
+    },
+    CN: {
+        fleetApiUrl: 'https://fleet-api.prd.cn.vn.cloud.tesla.cn',
+        authTokenUrl: 'https://auth.tesla.cn/oauth2/v3/token',
+        partnerAuthUrl: 'https://auth.tesla.cn/oauth2/v3/token',
+        audience: 'https://fleet-api.prd.cn.vn.cloud.tesla.cn',
+        developerPortal: 'https://developer.tesla.cn'
+    }
+};
+const regionConfig = REGION_CONFIG[TESLA_REGION] || REGION_CONFIG.NA;
+const BASE_URL = regionConfig.fleetApiUrl;
+const AUTH_URL = regionConfig.partnerAuthUrl;
+const USER_AUTH_URL = regionConfig.authTokenUrl;
 
 // Configuration
-let PORT = 4000; // Default port, but we'll try others if it's in use
-const PORTS_TO_TRY = [4000, 4001, 4002, 4003, 4004]; // Try these ports in order
+let PORT = 4000;
+const PORTS_TO_TRY = [4000, 4001, 4002, 4003, 4004];
 const KEYS_DIR = path.join(__dirname, '../keys');
 const PRIVATE_KEY_PATH = path.join(KEYS_DIR, 'private-key.pem');
 const PUBLIC_KEY_PATH = path.join(KEYS_DIR, 'public-key.pem');
 const PUBLIC_KEY_ENDPOINT = '/.well-known/appspecific/com.tesla.3p.public-key.pem';
-
-// Tesla API configuration
-const BASE_URL = 'https://fleet-api.prd.na.vn.cloud.tesla.com'; // Change if needed for your region
-const AUTH_URL = 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token';
 
 const app = express();
 
@@ -103,7 +128,7 @@ async function getPartnerAuthToken() {
         params.append('grant_type', 'client_credentials');
         params.append('client_id', clientId);
         params.append('client_secret', clientSecret);
-        params.append('audience', BASE_URL);
+        params.append('audience', regionConfig.audience);
         params.append('scope', 'openid vehicle_device_data vehicle_cmds vehicle_charging_cmds');
 
         const response = await axios.post(AUTH_URL, params, {
@@ -141,8 +166,11 @@ async function getAccessToken() {
         params.append('client_secret', clientSecret);
         params.append('refresh_token', refreshToken);
         params.append('scope', 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds');
+        if (TESLA_REGION === 'CN') {
+            params.append('audience', regionConfig.audience);
+        }
 
-        const response = await axios.post('https://auth.tesla.com/oauth2/v3/token', params, {
+        const response = await axios.post(USER_AUTH_URL, params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
@@ -351,10 +379,11 @@ async function startServer() {
 
         console.log('\nUpdate your Tesla Developer Portal settings:');
         console.log('---------------------------');
-        console.log('1. Go to the Tesla Developer Portal: https://developer.tesla.com');
+        console.log(`Region: ${TESLA_REGION}`);
+        console.log(`1. Go to the Tesla Developer Portal: ${regionConfig.developerPortal}`);
         console.log('2. Update your application settings:');
         console.log(`   - Set Allowed Origin to: ${url}`);
-        console.log(`   - Set Allowed Redirect URI to: ${url}/callback`);
+        console.log('   - (Optional) Add Redirect URI if needed; get-token uses http://localhost:3000/callback');
 
         // Ask if the user has updated the settings
         const rl2 = createReadlineInterface();
