@@ -1,0 +1,2 @@
+# TLS certs for local tesla-http-proxy (self-signed). Regenerate with: npm run command-proxy:setup
+# Do not commit private keys.

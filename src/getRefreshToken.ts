@@ -33,7 +33,7 @@ if (!clientId || !clientSecret) {
 const regionConfig = getTeslaRegionConfig();
 const AUTH_URL = regionConfig.authBaseUrl;
 const PORT = Number(process.env.TESLA_CALLBACK_PORT) || 3000;
-// 必须与 developer.tesla.cn 中「允许的重定向 URI」完全一致（可用花生壳 HTTPS 地址）
+// 必须与 developer.tesla.cn 中「允许的重定向 URI」完全一致（可用 cpolar 等内网穿透 HTTPS 地址）
 const REDIRECT_URI = (process.env.TESLA_REDIRECT_URI || `http://localhost:${PORT}/callback`).trim();
 const SCOPES = 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds';
 
@@ -229,7 +229,7 @@ function startServer() {
         if (REDIRECT_URI.startsWith('http://localhost') || REDIRECT_URI.startsWith('http://127.0.0.1')) {
             console.log('(本地回调：授权后浏览器会跳转到上述地址)');
         } else {
-            console.log(`(公网回调地址：${REDIRECT_URI} → 请确保花生壳/内网穿透已映射到本机 ${PORT} 端口)`);
+            console.log(`(公网回调地址：${REDIRECT_URI} → 请确保 cpolar 已映射到本机 ${PORT} 端口)`);
         }
     });
 }

@@ -17,6 +17,8 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import teslaService, { Vehicle } from "./teslaService.js";
+import { VEHICLE_MCP_TOOLS, handleVehicleMcpTool } from "./vehicleMcpTools.js";
+import vehicleCommandService from "./vehicleCommandService.js";
 
 /**
  * Cache for Tesla vehicles to avoid repeated API calls
@@ -117,139 +119,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
   if (vehicles.length === 0) {
     return {
-      tools: []
+      tools: VEHICLE_MCP_TOOLS.filter((t) =>
+        ['refresh_vehicles', 'debug_vehicles', 'check_command_proxy'].includes(t.name)
+      ),
     };
   }
 
-  return {
-    tools: [
-      {
-        name: "wake_up",
-        description: "Wake up your Tesla vehicle from sleep mode",
-        inputSchema: {
-          type: "object",
-          properties: {
-            vehicle_id: {
-              type: "string",
-              description: "Tag of the vehicle to wake up (can be id, vehicle_id, or vin)"
-            }
-          },
-          required: ["vehicle_id"]
-        }
-      },
-      {
-        name: "refresh_vehicles",
-        description: "Refresh the list of Tesla vehicles",
-        inputSchema: {
-          type: "object",
-          properties: {
-            random_string: {
-              type: "string",
-              description: "Dummy parameter for no-parameter tools"
-            }
-          },
-          required: ["random_string"]
-        }
-      },
-      {
-        name: "debug_vehicles",
-        description: "Show debug information about available vehicles",
-        inputSchema: {
-          type: "object",
-          properties: {
-            random_string: {
-              type: "string",
-              description: "Dummy parameter for no-parameter tools"
-            }
-          },
-          required: ["random_string"]
-        }
-      }
-    ]
-  };
+  return { tools: VEHICLE_MCP_TOOLS };
 });
 
 /**
  * Handler for the vehicle control tools.
  */
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  switch (request.params.name) {
-    case "wake_up": {
-      const vehicleId = String(request.params.arguments?.vehicle_id);
-      if (!vehicleId) {
-        throw new Error("Vehicle ID is required");
-      }
-
-      // Validate the vehicle ID exists
-      const vehicles = await getVehicles();
-      const vehicle = vehicles.find(v =>
-        String(v.id) === vehicleId ||
-        String(v.vehicle_id) === vehicleId ||
-        String(v.vin) === vehicleId
-      );
-
-      if (!vehicle) {
-        throw new Error(`Vehicle ${vehicleId} not found`);
-      }
-
-      try {
-        const result = await teslaService.wakeUp(vehicleId);
-
-        return {
-          content: [{
-            type: "text",
-            text: result
-              ? `Successfully woke up ${vehicle.display_name || 'your Tesla'} (state: ${result.state})`
-              : `Failed to wake up ${vehicle.display_name || 'your Tesla'}`
-          }]
-        };
-      } catch (error) {
-        throw new Error(`Failed to wake up vehicle: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    case "refresh_vehicles": {
-      await getVehicles(true);
-
-      return {
-        content: [{
-          type: "text",
-          text: `Successfully refreshed the vehicle list. Found ${vehiclesCache.length} vehicles.`
-        }]
-      };
-    }
-
-    case "debug_vehicles": {
-      const vehicles = await getVehicles();
-
-      if (vehicles.length === 0) {
-        return {
-          content: [{
-            type: "text",
-            text: "No vehicles found. Make sure your Tesla account is properly connected."
-          }]
-        };
-      }
-
-      const debugInfo = vehicles.map(v => {
-        return `Vehicle: ${v.display_name || 'Tesla'}\n` +
-          `- id: ${v.id}\n` +
-          `- vehicle_id: ${v.vehicle_id}\n` +
-          `- vin: ${v.vin}\n` +
-          `- state: ${v.state}`;
-      }).join('\n\n');
-
-      return {
-        content: [{
-          type: "text",
-          text: `Found ${vehicles.length} vehicles:\n\n${debugInfo}`
-        }]
-      };
-    }
-
-    default:
-      throw new Error("Unknown tool");
-  }
+  return handleVehicleMcpTool(
+    request.params.name,
+    request.params.arguments as Record<string, unknown> | undefined,
+    getVehicles,
+    vehiclesCache
+  );
 });
 
 /**
@@ -331,10 +219,13 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
  */
 async function main() {
   try {
-    // Preload vehicles on startup to catch any auth errors early
     await getVehicles();
-    // Don't log this to stdout as it interferes with MCP protocol
-    // console.error("Successfully connected to Tesla API");
+    const proxyHealth = await vehicleCommandService.checkProxyHealth();
+    if (!proxyHealth.ok) {
+      console.error(`[vehicle-command] ${proxyHealth.message}`);
+    } else {
+      console.error(`[vehicle-command] ${proxyHealth.message}`);
+    }
   } catch (error) {
     // Use stderr instead of stdout for error messages
     console.error("Warning: Failed to connect to Tesla API on startup. Please check your credentials.");

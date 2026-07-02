@@ -21,6 +21,25 @@ A Model Context Protocol (MCP) server that connects to the Tesla Fleet API, allo
 - Tesla API credentials (Client ID and Client Secret)
 - Ngrok (for development and registration)
 
+## China (CN) Setup
+
+For Tesla China accounts (`developer.tesla.cn`, `auth.tesla.cn`), see the full setup guide:
+
+**[docs/CN_配置与接入指南.md](docs/CN_配置与接入指南.md)** — OAuth, Partner registration, Broker integration, and troubleshooting.
+
+Set `TESLA_REGION=CN` in `.env` before running `get-token` / `register`.
+
+### Vehicle Command (lock, climate, honk)
+
+Signed commands require [tesla-http-proxy](https://github.com/teslamotors/vehicle-command):
+
+```bash
+npm run command-proxy:setup   # TLS certs in config/
+npm run command-proxy         # Docker, Go binary, or bin/tesla-http-proxy.exe
+```
+
+MCP exposes 12 tools when vehicles are connected (see `docs/CN_配置与接入指南.md`).
+
 ## Security Best Practices
 
 This project handles sensitive Tesla API credentials. Please follow these security practices:

@@ -114,6 +114,13 @@ export class TeslaService {
     }
 
     /**
+     * Get access token for Fleet API / Vehicle Command proxy (refreshes if expired).
+     */
+    async fetchAccessToken(): Promise<string> {
+        return this.getAccessToken();
+    }
+
+    /**
      * Get access token, refreshing if necessary
      */
     private async getAccessToken(): Promise<string> {

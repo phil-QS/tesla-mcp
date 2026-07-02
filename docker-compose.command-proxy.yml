@@ -1,0 +1,33 @@
+# Official Tesla Vehicle Command HTTP proxy
+# @see https://github.com/teslamotors/vehicle-command
+#
+# Prerequisites:
+#   1. npm run command-proxy:setup   (generates config/tls-*.pem)
+#   2. keys/private-key.pem from npm run register
+#
+# Start: npm run command-proxy
+
+services:
+  tesla-command-proxy:
+    image: tesla/vehicle-command:latest
+    container_name: tesla-command-proxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4443:4443"
+    volumes:
+      - ./config:/config:ro
+      - ./keys:/keys:ro
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - -tls-key
+      - /config/tls-key.pem
+      - -cert
+      - /config/tls-cert.pem
+      - -key-file
+      - /keys/private-key.pem
+      - -host
+      - "0.0.0.0"
+      - -port
+      - "4443"
+      - -verbose

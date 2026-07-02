@@ -17,7 +17,12 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "get-token": "node --loader ts-node/esm src/getRefreshToken.ts",
     "test-api": "node --loader ts-node/esm src/testConnection.ts",
+    "test-command": "node --loader ts-node/esm src/testCommand.ts",
     "register": "node src/register.js",
+    "command-proxy:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-command-proxy.ps1",
+    "command-proxy": "powershell -ExecutionPolicy Bypass -File scripts/start-command-proxy.ps1",
+    "command-proxy:wsl-install": "wsl bash -lc \"sed -i 's/\\r$//' /mnt/c/wqs/03_work/qiniu/mcp_market/tesla-mcp/scripts/wsl-install-proxy.sh /mnt/c/wqs/03_work/qiniu/mcp_market/tesla-mcp/scripts/wsl-start-proxy.sh 2>/dev/null; bash /mnt/c/wqs/03_work/qiniu/mcp_market/tesla-mcp/scripts/wsl-install-proxy.sh\"",
+    "command-proxy:wsl": "wsl bash /mnt/c/wqs/03_work/qiniu/mcp_market/tesla-mcp/scripts/wsl-start-proxy.sh",
     "start": "node run-mcp.js"
   },
   "dependencies": {
@@ -29,6 +34,7 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "selfsigned": "^5.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
